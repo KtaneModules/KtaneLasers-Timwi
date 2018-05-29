@@ -147,10 +147,6 @@ Prefab:
       propertyPath: m_RootOrder
       value: 2
       objectReference: {fileID: 0}
-    - target: {fileID: 1114289574625330, guid: 28a69e6320bfd0044adcf68251247784, type: 2}
-      propertyPath: m_Name
-      value: lasers
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_ParentPrefab: {fileID: 100100000, guid: 28a69e6320bfd0044adcf68251247784, type: 2}
   m_IsPrefabParent: 0
