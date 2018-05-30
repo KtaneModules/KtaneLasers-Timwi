@@ -122,7 +122,10 @@ public class LasersModule : MonoBehaviour
         moduleParity = Bomb.GetModuleNames().Count() % 2;
         //Technically int.Parse(numbers[i].text) can be replaced with pipeOrder[i]
         for (int i = 0; i < 3; i++) rowRoot += int.Parse(numbers[i].text);
-        for (int i = 2; i < 9 && !(i % 3 == 0); i++) columnRoot += int.Parse(numbers[i].text);
+        for (int i = 1; i < 9; i++)
+        {
+            if (!(i % 3 == 0)) columnRoot += int.Parse(numbers[i].text);
+        }
         while (timeRoot > 9) timeRoot = timeRoot.ToString().ToCharArray().Sum(x => x - '0');
         while (rowRoot > 9) rowRoot = rowRoot.ToString().ToCharArray().Sum(x => x - '0');
         while (columnRoot > 9) columnRoot = columnRoot.ToString().ToCharArray().Sum(x => x - '0');
