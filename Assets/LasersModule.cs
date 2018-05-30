@@ -33,6 +33,7 @@ public class LasersModule : MonoBehaviour
     private int rowRoot, columnRoot, timeRoot, originalTime, moduleParity;
     private string message;
     private List<List<Renderer>> pipeRows = new List<List<Renderer>>(), pipeColumns = new List<List<Renderer>>();
+    private Queue<IEnumerable> queue = new Queue<IEnumerable>();
 
     void Start()
     {
@@ -82,11 +83,12 @@ public class LasersModule : MonoBehaviour
         Debug.LogFormat("[Lasers #{0}] Current laser color is red", _moduleId);
         //Valid inputs for each stage - taken from Check()
         Valid();
+        StartCoroutine(WaitForSelection());
 
         for (int i = 0; i < pipes.Length; i++)
         {
             int j = i;
-            pipes[i].OnInteract += delegate () { StartCoroutine(Selection(j)); return false; };
+            pipes[i].OnInteract += delegate () { queue.Enqueue(Selection(j)); return false; };
         }
 
         //canPress and activated for module interaction. canPress mostly used for IEnumerator purposes
@@ -376,12 +378,24 @@ public class LasersModule : MonoBehaviour
         Debug.LogFormat("[Lasers #{0}] Acceptable selections are {1}", _moduleId, message);
     }
 
-    IEnumerator Selection(int i)
+    IEnumerator WaitForSelection()
     {
         //No button interaction if module is not activated
-        if (!activated) yield break;
-        //Pause selections while the coroutine is running (probably buggy)
-        while (!canPress) yield return null;
+        while (isActiveAndEnabled)
+        {
+            if (!activated) queue.Clear();
+            yield return new WaitUntil(() => canPress);
+            if (queue.Count > 0)
+            {
+                IEnumerable press = queue.Dequeue();
+                foreach (object item in press) yield return item;
+            }
+        }
+    }
+
+    IEnumerable Selection(int i)
+    {
+        Debug.LogFormat(i.ToString());
         //isStriking is used mostly for TP
         isStriking = false;
         //Fade the selected laser and connected connections to black (based on rule r)
@@ -615,7 +629,29 @@ public class LasersModule : MonoBehaviour
         foreach (Renderer ren in centerPipes)
         {
             var a = ren.material.color;
-            if (ren.gameObject.activeSelf && !Connections.Where(x => x.name.Contains(ren.name[4].ToString())).Select(x => x.gameObject.activeSelf).Contains(true))
+            var b = new Renderer[] { };
+            switch (ren.name)
+            {
+                case "Pipe1": b = new[] { centerPipes[1], centerPipes[3] };
+                    break;
+                case "Pipe2": b = new[] { centerPipes[0], centerPipes[2], centerPipes[4] };
+                    break;
+                case "Pipe3": b = new[] { centerPipes[1], centerPipes[5] };
+                    break;
+                case "Pipe4": b = new[] { centerPipes[0], centerPipes[4], centerPipes[6] };
+                    break;
+                case "Pipe5": b = new[] { centerPipes[1], centerPipes[3], centerPipes[5], centerPipes[7] };
+                    break;
+                case "Pipe6": b = new[] { centerPipes[2], centerPipes[4], centerPipes[8] };
+                    break;
+                case "Pipe7": b = new[] { centerPipes[3], centerPipes[7] };
+                    break;
+                case "Pipe8": b = new[] { centerPipes[6], centerPipes[4], centerPipes[8] };
+                    break;
+                case "Pipe9": b = new[] { centerPipes[5], centerPipes[7] };
+                    break;
+            }
+            if (ren.gameObject.activeSelf && b.All(x => x.gameObject.activeSelf.Equals(false)))
             {
                 switch (ren.name[4] - '0')
                 {
@@ -641,30 +677,28 @@ public class LasersModule : MonoBehaviour
                         Connections[44].material.color = a;
                         break;
                     case 5:
-                        if (!Connections.Select(x => x.gameObject.activeSelf).Contains(true))
+                        foreach (Renderer con in Connections) con.gameObject.SetActive(false);
+                        if (centerPipes[0].gameObject.activeSelf)
                         {
-                            if (centerPipes[0].gameObject.activeSelf)
-                            {
-                                Connections[12].gameObject.SetActive(true);
-                                Connections[12].material.color = a;
-                            }
-                            if (centerPipes[2].gameObject.activeSelf)
-                            {
-                                Connections[15].gameObject.SetActive(true);
-                                Connections[15].material.color = a;
-                            }
-                            if (centerPipes[6].gameObject.activeSelf)
-                            {
-                                Connections[16].gameObject.SetActive(true);
-                                Connections[16].material.color = a;
-                            }
-                            if (centerPipes[8].gameObject.activeSelf)
-                            {
-                                Connections[18].gameObject.SetActive(true);
-                                Connections[18].material.color = a;
-                            }
+                            Connections[12].gameObject.SetActive(true);
+                            Connections[12].material.color = a;
                         }
-                        break;
+                        if (centerPipes[2].gameObject.activeSelf)
+                        {
+                            Connections[15].gameObject.SetActive(true);
+                            Connections[15].material.color = a;
+                        }
+                        if (centerPipes[6].gameObject.activeSelf)
+                        {
+                            Connections[16].gameObject.SetActive(true);
+                            Connections[16].material.color = a;
+                        }
+                        if (centerPipes[8].gameObject.activeSelf)
+                        {
+                            Connections[18].gameObject.SetActive(true);
+                            Connections[18].material.color = a;
+                        }
+                        goto For;
                     case 6:
                         Connections[45].gameObject.SetActive(true);
                         Connections[45].material.color = a;
@@ -688,6 +722,7 @@ public class LasersModule : MonoBehaviour
                 }
             }
         }
+        For: return;
     }
 
     //Essentially another "Rules()" function, and also why Rules() is mostly missing from Check()
