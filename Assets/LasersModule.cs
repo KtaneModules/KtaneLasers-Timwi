@@ -395,7 +395,7 @@ public class LasersModule : MonoBehaviour
 
     IEnumerable Selection(int i)
     {
-        Debug.LogFormat(i.ToString());
+        if (!pipes[i].gameObject.activeSelf) yield break;
         //isStriking is used mostly for TP
         isStriking = false;
         //Fade the selected laser and connected connections to black (based on rule r)
@@ -616,6 +616,7 @@ public class LasersModule : MonoBehaviour
         else Debug.LogFormat("[Lasers #{0}] Laser selected, module has been reset", _moduleId);
         Debug.LogFormat("[Lasers #{0}] Current laser color is red", _moduleId);
         special = false;
+        queue.Clear();
     }
 
     //Connect lasers to wall if all adjacent lasers are inactive
@@ -866,10 +867,12 @@ public class LasersModule : MonoBehaviour
     //Not really finished
     IEnumerator Finale()
     {
+        var fade = Fade(remember.ToArray(), 1, remember.Count() - 1, 0.5f, Color.black, Color.red, Color.black, Color.white);
+        while (fade.MoveNext()) yield return fade.Current;
         for (int i = 0; i < remember.Count; i++)
         {
             //Fade requires an array, but oh well, just feed it on item
-            var fade = Fade(new[] { remember[i] }, 1, 0, 0.5f, Color.black, colorList[i]);
+            fade = Fade(new[] { remember[i] }, 1, 0, 0.5f, remember[i].material.color, colorList[i]);
             while (fade.MoveNext()) yield return fade.Current;
             if (i < remember.Count - 1)
             {
@@ -880,6 +883,7 @@ public class LasersModule : MonoBehaviour
                 fade = Fade(a.ToArray(), a.Count, 0, 0.5f, Color.black, colorList[i]);
                 while (fade.MoveNext()) yield return fade.Current;
             }
+            yield return null;
         }
 
         Module.HandlePass();
@@ -906,7 +910,7 @@ public class LasersModule : MonoBehaviour
             //Don't move to the next selection until the previous selection is complete
             yield return new WaitUntil(() => canPress);
             //idk honestly, but we do want this to stop if a strike is being dealt
-            if (isStriking) StopAllCoroutines();
+            if (isStriking) yield break;
         }
     }
 }
