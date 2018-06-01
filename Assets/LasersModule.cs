@@ -889,7 +889,7 @@ public class LasersModule : MonoBehaviour
         Module.HandlePass();
     }
 
-    private string TwitchHelpMessage = "Select a laser in position 1-9 using !{0} press 4. You may select multiple lasers by using !{0} press 1235679";
+    private string TwitchHelpMessage = "Select a button in position 1-9 using !{0} press 4. Button positions are 1-9 in reading order. You may select multiple buttons by using !{0} press 1235679";
 
     private IEnumerator ProcessTwitchCommand(string command)
     {
