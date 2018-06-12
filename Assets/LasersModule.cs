@@ -33,6 +33,7 @@ public class LasersModule : MonoBehaviour
     private int _stage, _rowRoot, _columnRoot, _timeRoot, _moduleParity;
     private Queue<IEnumerable> queue = new Queue<IEnumerable>();
     private bool _animating;
+    private bool _isSolved;
     private int? _mouseOnHatch;
 
     private static int _moduleIdCounter = 1;
@@ -97,43 +98,47 @@ public class LasersModule : MonoBehaviour
     public GameObject Sphere;
     private void Update()
     {
-        if (_hatchesAlreadyPressed == null || _hatchesAlreadyPressed.Count == 0 || _hatchesAlreadyPressed.Count < _stage)
-            return;
-
-        var ix = _hatchesAlreadyPressed[_hatchesAlreadyPressed.Count - 1];
-        var laser = Lasers[ix];
-        var lens = _laserLenses[ix];
-        var beam = _laserBeams[ix];
-        if (lens == null || beam == null)
-            return;
-
-        Vector3 targetPoint;
-        float distance;
-        RaycastHit hit;
-
-        if (_mouseOnHatch != null && _mouseOnHatch != ix)
-            targetPoint = transform.InverseTransformPoint(Hatches[_mouseOnHatch.Value].transform.TransformPoint(0, 0, .02f));
-        else if (!Input.mousePresent)
-            goto skipRotation;
-        else
+        for (int i = 0; i < _hatchesAlreadyPressed.Count; i++)
         {
-            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            if (!new Plane(transform.TransformVector(Vector3.up), lens.TransformPoint(0, 0, 0)).Raycast(ray, out distance))
-                goto skipRotation;
-            var pt = ray.GetPoint(distance);
-            Sphere.transform.position = pt;
-            targetPoint = Sphere.transform.localPosition;
-        }
-        var laserPosition = transform.InverseTransformPoint(laser.transform.TransformPoint(0, 0, 0));
-        var targetRotation = Quaternion.Euler(0, -Mathf.Atan2(targetPoint.z - laserPosition.z, targetPoint.x - laserPosition.x) * 180 / Mathf.PI, 0);
-        laser.localRotation = Quaternion.RotateTowards(laser.localRotation, targetRotation, 30 * Time.deltaTime);
+            var ix = _hatchesAlreadyPressed[i];
+            var laser = Lasers[ix];
+            var lens = _laserLenses[ix];
+            var beam = _laserBeams[ix];
+            if (lens == null || beam == null)
+                continue;
 
-        skipRotation:
-        var localDistance = .1f;
-        if (Physics.Raycast(new Ray(lens.TransformPoint(0, 1.1f, 0), lens.TransformDirection(Vector3.up)), out hit))
-            localDistance = laser.InverseTransformVector(0, hit.distance, 0).magnitude;
-        beam.localPosition = new Vector3(localDistance, .031f, 0);
-        beam.localScale = new Vector3(.0025f, localDistance, .0025f);
+            Vector3 targetPoint;
+            float distance;
+            RaycastHit hit;
+
+            if (i < _hatchesAlreadyPressed.Count - 1)
+                targetPoint = transform.InverseTransformPoint(Hatches[_hatchesAlreadyPressed[i + 1]].transform.TransformPoint(0, 0, .02f));
+            else if (i == 6 && _isSolved)
+                targetPoint = transform.InverseTransformPoint(Hatches[_hatchesAlreadyPressed[0]].transform.TransformPoint(0, 0, .02f));
+            else if (_mouseOnHatch != null && _mouseOnHatch != ix)
+                targetPoint = transform.InverseTransformPoint(Hatches[_mouseOnHatch.Value].transform.TransformPoint(0, 0, .02f));
+            else if (!Input.mousePresent)
+                goto skipRotation;
+            else
+            {
+                var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+                if (!new Plane(transform.TransformVector(Vector3.up), lens.TransformPoint(0, 0, 0)).Raycast(ray, out distance))
+                    goto skipRotation;
+                var pt = ray.GetPoint(distance);
+                Sphere.transform.position = pt;
+                targetPoint = Sphere.transform.localPosition;
+            }
+            var laserPosition = transform.InverseTransformPoint(laser.transform.TransformPoint(0, 0, 0));
+            var targetRotation = Quaternion.Euler(0, -Mathf.Atan2(targetPoint.z - laserPosition.z, targetPoint.x - laserPosition.x) * 180 / Mathf.PI, 0);
+            laser.localRotation = Quaternion.RotateTowards(laser.localRotation, targetRotation, 30 * Time.deltaTime);
+
+            skipRotation:
+            var localDistance = .1f;
+            if (Physics.Raycast(new Ray(lens.TransformPoint(0, 1.1f, 0), lens.TransformDirection(Vector3.up)), out hit))
+                localDistance = laser.InverseTransformVector(0, hit.distance, 0).magnitude;
+            beam.localPosition = new Vector3(localDistance, .031f, 0);
+            beam.localScale = new Vector3(.0025f, localDistance, .0025f);
+        }
     }
 
     bool IsValid(int hatch)
@@ -178,22 +183,26 @@ public class LasersModule : MonoBehaviour
     {
         return delegate
         {
+            Hatches[i].AddInteractionPunch(.2f);
+
+            if (_isSolved)
+                return false;
+
             if (IsValid(i))
             {
                 Debug.LogFormat("[Lasers #{0}] For stage {1}, you pressed Laser {2} ({3}) — acceptable.", _moduleId, _stageNames[_stage], _laserOrder[i], _positionNames[i]);
+                Audio.PlayGameSoundAtTransform(KMSoundOverride.SoundEffect.WireSequenceMechanism, Hatches[i].transform);
                 moveLasersUpDown(true, colorList[_stage], i);
+                _hatchesAlreadyPressed.Add(i);
                 _stage++;
                 if (_stage == 7)
                 {
                     Debug.LogFormat("[Lasers #{0}] Module solved.", _moduleId);
                     Module.HandlePass();
-                    _hatchesAlreadyPressed = null;
+                    _isSolved = true;
                 }
                 else
-                {
-                    _hatchesAlreadyPressed.Add(i);
                     LogPermissibleLasers();
-                }
             }
             else
             {
