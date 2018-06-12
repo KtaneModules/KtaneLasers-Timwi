@@ -80,9 +80,9 @@ public class LasersModule : MonoBehaviour
         {
             _leftHatches[i].material.mainTexture = _leftTextures[_laserOrder[i] - 1];
             _rightHatches[i].material.mainTexture = _rightTextures[_laserOrder[i] - 1];
-            Hatches[i].OnInteract = GetHatchPressHandler(i);
-            Hatches[i].OnDeselect = GetMouseSetter(null);
-            Hatches[i].OnSelect = GetMouseSetter(i);
+            Hatches[i].OnInteract += GetHatchPressHandler(i);
+            Hatches[i].OnDeselect += GetMouseSetter(null);
+            Hatches[i].OnSelect += GetMouseSetter(i);
         }
 
         StartCoroutine(ProcessQueue());
@@ -94,6 +94,7 @@ public class LasersModule : MonoBehaviour
         return delegate
         {
             _mouseOnHatch = val;
+            Debug.LogFormat("<Lasers #{0}> Setting _mouseOnHatch to {1}", _moduleId, _mouseOnHatch == null ? "<null>" : _mouseOnHatch.Value.ToString());
         };
     }
 
