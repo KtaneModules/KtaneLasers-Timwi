@@ -14,24 +14,29 @@ public class LasersModule : MonoBehaviour
     public KMAudio Audio;
     public KMSelectable[] Hatches;
     public Transform[] Lasers;
-    private bool[] _isLaserUp;
     public Texture[] Textures;
-    private Texture[] _leftTextures, _rightTextures;
     public GameObject HatchesParent;
-    private MeshRenderer[] _leftHatches, _rightHatches;
 
     static Color orange = new Color(1f, 140 / 255f, 0), purple = new Color(0.5f, 0, 0.5f);
     private readonly List<Color> colorList = new List<Color> { Color.red, orange, Color.yellow, Color.green, Color.blue, purple, Color.white };
 
-    private List<int> laserOrder = new List<int>();
-    private List<int> hatchesAlreadyPressed = new List<int>();
-    private int _stage;
-    private static int _moduleIdCounter = 1;
-    private int _moduleId;
-
-    private int rowRoot, columnRoot, timeRoot, moduleParity;
+    private readonly Texture[] _leftTextures = new Texture[9];
+    private readonly Texture[] _rightTextures = new Texture[9];
+    private readonly MeshRenderer[] _leftHatches = new MeshRenderer[9];
+    private readonly MeshRenderer[] _rightHatches = new MeshRenderer[9];
+    private readonly Transform[] _laserLenses = new Transform[9];
+    private readonly Transform[] _laserBeams = new Transform[9];
+    private readonly Quaternion[] _laserTargetRotations = new Quaternion[9];
+    private readonly bool[] _isLaserUp = new bool[9];
+    private List<int> _laserOrder = new List<int>();
+    private List<int> _hatchesAlreadyPressed = new List<int>();
+    private int _stage, _rowRoot, _columnRoot, _timeRoot, _moduleParity;
     private Queue<IEnumerable> queue = new Queue<IEnumerable>();
     private bool _animating;
+    private int? _mouseOnHatch;
+
+    private static int _moduleIdCounter = 1;
+    private int _moduleId;
 
     private static readonly string[] _stageNames = new[] { "red", "orange", "yellow", "green", "blue", "purple", "white" };
     private static readonly string[] _positionNames = new[] { "top left", "top middle", "top right", "middle left", "middle center", "middle right", "bottom left", "bottom middle", "bottom right" };
@@ -40,11 +45,8 @@ public class LasersModule : MonoBehaviour
     {
         _moduleId = _moduleIdCounter++;
 
-        _leftTextures = new Texture[9];
-        _rightTextures = new Texture[9];
-        _leftHatches = new MeshRenderer[9];
-        _rightHatches = new MeshRenderer[9];
-        _isLaserUp = new bool[9];
+        _laserLenses[0] = Lasers[0].Find("Lens");
+        _laserBeams[0] = Lasers[0].Find("Beam");
 
         for (int i = 0; i < 9; i++)
         {
@@ -54,67 +56,106 @@ public class LasersModule : MonoBehaviour
             _rightHatches[i] = HatchesParent.transform.Find("Hatch" + (i + 1)).Find("Right").GetComponent<MeshRenderer>();
         }
 
-        timeRoot = (int) Bomb.GetTime() % 9 + 1;    // Note: the rule is “time in minutes plus one”; the +1 cancels with a −1 in the formula for digital root
-        moduleParity = Bomb.GetModuleNames().Count() % 2;
+        _timeRoot = (int) Bomb.GetTime() % 9 + 1;    // Note: the rule is “time in minutes plus one”; the +1 cancels with a −1 in the formula for digital root
+        _moduleParity = Bomb.GetModuleNames().Count() % 2;
 
         // Randomize the order of the lasers.
         // I have independently verified that every possible permutation has a solution for every possible timer digital root and module number parity.
-        laserOrder.AddRange(Enumerable.Range(1, 9));
-        laserOrder.Shuffle();
+        _laserOrder.AddRange(Enumerable.Range(1, 9));
+        _laserOrder.Shuffle();
 
-        rowRoot = (laserOrder[0] + laserOrder[1] + laserOrder[2] - 1) % 9 + 1;
-        columnRoot = (new[] { 1, 2, 4, 5, 7, 8 }.Sum(x => laserOrder[x]) - 1) % 9 + 1;
+        _rowRoot = (_laserOrder[0] + _laserOrder[1] + _laserOrder[2] - 1) % 9 + 1;
+        _columnRoot = (new[] { 1, 2, 4, 5, 7, 8 }.Sum(x => _laserOrder[x]) - 1) % 9 + 1;
 
-        Debug.LogFormat("[Lasers #{0}] Laser numbers in reading order: {1}", _moduleId, laserOrder.JoinString(", "));
-        Debug.LogFormat("[Lasers #{0}] The laser numbers in the topmost row have digital root = {1}.", _moduleId, rowRoot);
-        Debug.LogFormat("[Lasers #{0}] The laser numbers in the rightmost two columns have digital root = {1}.", _moduleId, columnRoot);
-        Debug.LogFormat("[Lasers #{0}] The time in minutes plus one has digital root = {1}.", _moduleId, timeRoot);
-        Debug.LogFormat("[Lasers #{0}] The number of modules on the bomb has parity = {1}.", _moduleId, moduleParity);
+        Debug.LogFormat("[Lasers #{0}] Laser numbers in reading order: {1}", _moduleId, _laserOrder.JoinString(", "));
+        Debug.LogFormat("[Lasers #{0}] The laser numbers in the topmost row have digital root = {1}.", _moduleId, _rowRoot);
+        Debug.LogFormat("[Lasers #{0}] The laser numbers in the rightmost two columns have digital root = {1}.", _moduleId, _columnRoot);
+        Debug.LogFormat("[Lasers #{0}] The time in minutes plus one has digital root = {1}.", _moduleId, _timeRoot);
+        Debug.LogFormat("[Lasers #{0}] The number of modules on the bomb has parity = {1}.", _moduleId, _moduleParity);
 
         for (int i = 0; i < 9; i++)
         {
-            _leftHatches[i].material.mainTexture = _leftTextures[laserOrder[i] - 1];
-            _rightHatches[i].material.mainTexture = _rightTextures[laserOrder[i] - 1];
+            _leftHatches[i].material.mainTexture = _leftTextures[_laserOrder[i] - 1];
+            _rightHatches[i].material.mainTexture = _rightTextures[_laserOrder[i] - 1];
             Hatches[i].OnInteract = GetHatchPressHandler(i);
+            Hatches[i].OnDeselect = GetMouseSetter(null);
+            Hatches[i].OnSelect = GetMouseSetter(i);
         }
 
         StartCoroutine(ProcessQueue());
         LogPermissibleLasers();
     }
 
+    private Action GetMouseSetter(int? val)
+    {
+        return delegate
+        {
+            _mouseOnHatch = val;
+        };
+    }
+
     public GameObject Sphere;
-    //private void Update()
-    //{
-    //    var spherePlane = new Plane(transform.TransformVector(Vector3.up), transform.TransformVector(Sphere.transform.localPosition));
-    //    Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-    //    float distance = 0;
-    //    if (spherePlane.Raycast(ray, out distance))
-    //    {
-    //        var pt = ray.GetPoint(distance);
-    //        Sphere.transform.position = pt;
-    //    }
-    //}
+    private void Update()
+    {
+        if (_hatchesAlreadyPressed == null || _hatchesAlreadyPressed.Count == 0 || _hatchesAlreadyPressed.Count < _stage)
+            return;
+
+        var ix = _hatchesAlreadyPressed[_hatchesAlreadyPressed.Count - 1];
+        var laser = Lasers[ix];
+        var lens = _laserLenses[ix];
+        var beam = _laserBeams[ix];
+        if (lens == null || beam == null)
+            return;
+
+        Vector3 targetPoint;
+        float distance;
+        RaycastHit hit;
+
+        if (_mouseOnHatch != null && _mouseOnHatch != ix)
+            targetPoint = transform.InverseTransformPoint(Hatches[_mouseOnHatch.Value].transform.TransformPoint(0, 0, .02f));
+        else if (!Input.mousePresent)
+            goto skipRotation;
+        else
+        {
+            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (!new Plane(transform.TransformVector(Vector3.up), lens.TransformPoint(0, 0, 0)).Raycast(ray, out distance))
+                goto skipRotation;
+            var pt = ray.GetPoint(distance);
+            Sphere.transform.position = pt;
+            targetPoint = Sphere.transform.localPosition;
+        }
+        var laserPosition = transform.InverseTransformPoint(laser.transform.TransformPoint(0, 0, 0));
+        var targetRotation = Quaternion.Euler(0, -Mathf.Atan2(targetPoint.z - laserPosition.z, targetPoint.x - laserPosition.x) * 180 / Mathf.PI, 0);
+        laser.localRotation = Quaternion.RotateTowards(laser.localRotation, targetRotation, 30 * Time.deltaTime);
+
+        skipRotation:
+        var localDistance = .1f;
+        if (Physics.Raycast(new Ray(lens.TransformPoint(0, 1.1f, 0), lens.TransformDirection(Vector3.up)), out hit))
+            localDistance = laser.InverseTransformVector(0, hit.distance, 0).magnitude;
+        beam.localPosition = new Vector3(localDistance, .031f, 0);
+        beam.localScale = new Vector3(.0025f, localDistance, .0025f);
+    }
 
     bool IsValid(int hatch)
     {
         switch (_stage)
         {
             case 0:
-                return hatch / 3 != laserOrder.IndexOf(rowRoot) / 3;
+                return hatch / 3 != _laserOrder.IndexOf(_rowRoot) / 3;
             case 1:
-                return !hatchesAlreadyPressed.Contains(hatch) && (
-                    hatch % 3 == hatchesAlreadyPressed[0] % 3 ? Math.Abs(hatch / 3 - hatchesAlreadyPressed[0] / 3) != 1 :
-                    Math.Abs(hatch % 3 - hatchesAlreadyPressed[0] % 3) == 1 ? hatch / 3 != hatchesAlreadyPressed[0] / 3 : true);
+                return !_hatchesAlreadyPressed.Contains(hatch) && (
+                    hatch % 3 == _hatchesAlreadyPressed[0] % 3 ? Math.Abs(hatch / 3 - _hatchesAlreadyPressed[0] / 3) != 1 :
+                    Math.Abs(hatch % 3 - _hatchesAlreadyPressed[0] % 3) == 1 ? hatch / 3 != _hatchesAlreadyPressed[0] / 3 : true);
             case 2:
-                return !hatchesAlreadyPressed.Contains(hatch) && hatch % 3 != laserOrder.IndexOf(columnRoot) % 3;
+                return !_hatchesAlreadyPressed.Contains(hatch) && hatch % 3 != _laserOrder.IndexOf(_columnRoot) % 3;
             case 3:
-                return !hatchesAlreadyPressed.Contains(hatch) && Math.Abs(hatch % 3 - hatchesAlreadyPressed[2] % 3) == 1 && Math.Abs(hatch / 3 - hatchesAlreadyPressed[2] / 3) == 1;
+                return !_hatchesAlreadyPressed.Contains(hatch) && Math.Abs(hatch % 3 - _hatchesAlreadyPressed[2] % 3) == 1 && Math.Abs(hatch / 3 - _hatchesAlreadyPressed[2] / 3) == 1;
             case 4:
-                return !hatchesAlreadyPressed.Contains(hatch) && hatch % 3 != laserOrder.IndexOf(timeRoot) % 3 && hatch / 3 != laserOrder.IndexOf(timeRoot) / 3;
+                return !_hatchesAlreadyPressed.Contains(hatch) && hatch % 3 != _laserOrder.IndexOf(_timeRoot) % 3 && hatch / 3 != _laserOrder.IndexOf(_timeRoot) / 3;
             case 5:
-                return !hatchesAlreadyPressed.Contains(hatch) && laserOrder[hatch] % 2 != moduleParity;
+                return !_hatchesAlreadyPressed.Contains(hatch) && _laserOrder[hatch] % 2 != _moduleParity;
             case 6:
-                return !hatchesAlreadyPressed.Contains(hatch) && (Math.Abs(hatch % 3 - hatchesAlreadyPressed[4] % 3) > 1 || Math.Abs(hatch / 3 - hatchesAlreadyPressed[4] / 3) > 1);
+                return !_hatchesAlreadyPressed.Contains(hatch) && (Math.Abs(hatch % 3 - _hatchesAlreadyPressed[4] % 3) > 1 || Math.Abs(hatch / 3 - _hatchesAlreadyPressed[4] / 3) > 1);
         }
         return false;
     }
@@ -139,24 +180,24 @@ public class LasersModule : MonoBehaviour
         {
             if (IsValid(i))
             {
-                Debug.LogFormat("[Lasers #{0}] For stage {1}, you pressed Laser {2} ({3}) — acceptable.", _moduleId, _stageNames[_stage], laserOrder[i], _positionNames[i]);
+                Debug.LogFormat("[Lasers #{0}] For stage {1}, you pressed Laser {2} ({3}) — acceptable.", _moduleId, _stageNames[_stage], _laserOrder[i], _positionNames[i]);
+                moveLasersUpDown(true, colorList[_stage], i);
                 _stage++;
-                moveLasersUpDown(true, i);
                 if (_stage == 7)
                 {
                     Debug.LogFormat("[Lasers #{0}] Module solved.", _moduleId);
                     Module.HandlePass();
-                    hatchesAlreadyPressed = null;
+                    _hatchesAlreadyPressed = null;
                 }
                 else
                 {
-                    hatchesAlreadyPressed.Add(i);
+                    _hatchesAlreadyPressed.Add(i);
                     LogPermissibleLasers();
                 }
             }
             else
             {
-                Debug.LogFormat("[Lasers #{0}] For stage {1}, you pressed Laser {2} ({3}) — forbidden! Strike and module reset.", _moduleId, _stageNames[_stage], laserOrder[i], _positionNames[i]);
+                Debug.LogFormat("[Lasers #{0}] For stage {1}, you pressed Laser {2} ({3}) — forbidden! Strike and module reset.", _moduleId, _stageNames[_stage], _laserOrder[i], _positionNames[i]);
                 Module.HandleStrike();
                 Restart();
             }
@@ -164,9 +205,9 @@ public class LasersModule : MonoBehaviour
         };
     }
 
-    private void moveLasersUpDown(bool up, params int[] ixs)
+    private void moveLasersUpDown(bool up, Color color, params int[] ixs)
     {
-        queue.Enqueue(moveLasersUpDownAnimation(up, ixs));
+        queue.Enqueue(moveLasersUpDownAnimation(up, color, ixs));
     }
 
     private IEnumerator _openCloseHatch(int i, bool open, Action whenDone = null)
@@ -205,14 +246,20 @@ public class LasersModule : MonoBehaviour
         {
             Lasers[i] = Instantiate(Lasers[0]);
             Lasers[i].parent = Hatches[i].transform;
-            Lasers[i].localPosition = up ? downPos : upPos;
-            Lasers[i].localRotation = Quaternion.Euler(0, Rnd.Range(0f, 360f), 0);
+            Lasers[i].localRotation = _laserTargetRotations[i] = Quaternion.Euler(0, Rnd.Range(0f, 360f), 0);
             Lasers[i].localScale = Lasers[0].localScale;
             Lasers[i].name = "Laser";
+            _laserLenses[i] = Lasers[i].Find("Lens");
+            _laserBeams[i] = Lasers[i].Find("Beam");
+            _laserBeams[i].gameObject.SetActive(false);
         }
+        Lasers[i].localPosition = up ? downPos : upPos;
 
         if (up)
+        {
             yield return new WaitForSeconds(.5f);
+            Lasers[i].gameObject.SetActive(true);
+        }
         const float duration = 1.5f;
         var elapsed = 0f;
 
@@ -227,32 +274,48 @@ public class LasersModule : MonoBehaviour
             whenDone();
     }
 
-    private IEnumerable moveLasersUpDownAnimation(bool up, params int[] ixs)
+    private IEnumerable moveLasersUpDownAnimation(bool up, Color color, params int[] ixs)
     {
         _animating = true;
         var unfinished = 2 * ixs.Length;
         for (int i = 0; i < ixs.Length; i++)
         {
             _isLaserUp[ixs[i]] = up;
+            if (_laserBeams[ixs[i]] != null)
+                _laserBeams[ixs[i]].gameObject.SetActive(false);
+        }
+        for (int i = 0; i < ixs.Length; i++)
+        {
             StartCoroutine(_openCloseHatch(ixs[i], up, whenDone: () => { unfinished--; }));
             StartCoroutine(_moveLaser(ixs[i], up, whenDone: () => { unfinished--; }));
+            yield return new WaitForSeconds(.1f);
         }
         yield return new WaitUntil(() => unfinished == 0);
+        for (int i = 0; i < ixs.Length; i++)
+        {
+            if (up)
+            {
+                _laserBeams[ixs[i]].gameObject.SetActive(true);
+                _laserBeams[ixs[i]].GetComponent<MeshRenderer>().material.color = color;
+            }
+            else
+                Lasers[ixs[i]].gameObject.SetActive(false);
+        }
         _animating = false;
     }
 
     void Restart()
     {
         _stage = 0;
-        hatchesAlreadyPressed.Clear();
+        _hatchesAlreadyPressed.Clear();
         queue.Clear();
-        moveLasersUpDown(false, Enumerable.Range(0, 9).Where(ix => _isLaserUp[ix]).ToArray());
+        moveLasersUpDown(false, Color.black, Enumerable.Range(0, 9).Where(ix => _isLaserUp[ix]).ToArray());
         LogPermissibleLasers();
     }
 
     private void LogPermissibleLasers()
     {
-        Debug.LogFormat("[Lasers #{0}] Stage {1}: Permissible lasers: {2}", _moduleId, _stageNames[_stage], Enumerable.Range(0, 9).Where(hatch => IsValid(hatch)).Select(hatch => laserOrder[hatch]).JoinString(", "));
+        Debug.LogFormat("[Lasers #{0}] Stage {1}: Permissible lasers: {2}", _moduleId, _stageNames[_stage], Enumerable.Range(0, 9).Where(hatch => IsValid(hatch)).Select(hatch => _laserOrder[hatch]).JoinString(", "));
     }
 
 #pragma warning disable 414
@@ -273,7 +336,7 @@ public class LasersModule : MonoBehaviour
         foreach (char c in commands2)
         {
             n = c - '0' - 1;
-            if (hatchesAlreadyPressed.Contains(n))
+            if (_hatchesAlreadyPressed.Contains(n))
                 yield break;
             buttons.Add(Hatches[n]);
         }
