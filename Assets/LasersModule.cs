@@ -97,7 +97,6 @@ public class LasersModule : MonoBehaviour
         };
     }
 
-    public GameObject Sphere;
     private void Update()
     {
         for (int i = 0; i < _hatchesAlreadyPressed.Count; i++)
@@ -127,8 +126,7 @@ public class LasersModule : MonoBehaviour
                 if (!new Plane(transform.TransformVector(Vector3.up), lens.TransformPoint(0, 0, 0)).Raycast(ray, out distance))
                     goto skipRotation;
                 var pt = ray.GetPoint(distance);
-                Sphere.transform.position = pt;
-                targetPoint = Sphere.transform.localPosition;
+                targetPoint = transform.InverseTransformPoint(pt);
             }
             var laserPosition = transform.InverseTransformPoint(laser.transform.TransformPoint(0, 0, 0));
             var targetRotation = Quaternion.Euler(0, -Mathf.Atan2(targetPoint.z - laserPosition.z, targetPoint.x - laserPosition.x) * 180 / Mathf.PI, 0);
