@@ -110,7 +110,6 @@ public class LasersModule : MonoBehaviour
                 continue;
 
             Vector3 targetPoint;
-            float distance;
             RaycastHit hit;
 
             if (i < _hatchesAlreadyPressed.Count - 1)
@@ -119,16 +118,8 @@ public class LasersModule : MonoBehaviour
                 targetPoint = transform.InverseTransformPoint(Hatches[_hatchesAlreadyPressed[0]].transform.TransformPoint(0, 0, .02f));
             else if (_mouseOnHatch != null && _mouseOnHatch != ix)
                 targetPoint = transform.InverseTransformPoint(Hatches[_mouseOnHatch.Value].transform.TransformPoint(0, 0, .02f));
-            else if (!Input.mousePresent)
-                goto skipRotation;
             else
-            {
-                var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-                if (!new Plane(transform.TransformVector(Vector3.up), lens.TransformPoint(0, 0, 0)).Raycast(ray, out distance))
-                    goto skipRotation;
-                var pt = ray.GetPoint(distance);
-                targetPoint = transform.InverseTransformPoint(pt);
-            }
+                goto skipRotation;
             var laserPosition = transform.InverseTransformPoint(laser.transform.TransformPoint(0, 0, 0));
             var targetRotation = Quaternion.Euler(0, -Mathf.Atan2(targetPoint.z - laserPosition.z, targetPoint.x - laserPosition.x) * 180 / Mathf.PI, 0);
             laser.localRotation = Quaternion.RotateTowards(laser.localRotation, targetRotation, 30 * Time.deltaTime);
