@@ -17,7 +17,7 @@ public class LasersModule : MonoBehaviour
     public Texture[] Textures;
     public GameObject HatchesParent;
 
-    static Color orange = new Color(1f, 140 / 255f, 0), purple = new Color(0.5f, 0, 0.5f);
+    static Color orange = new Color(1f, 155 / 255f, 0), purple = new Color(0.5f, 0, 0.5f);
     private readonly List<Color> colorList = new List<Color> { Color.red, orange, Color.yellow, Color.green, Color.blue, purple, Color.white };
 
     private readonly Texture[] _leftTextures = new Texture[9];
@@ -26,6 +26,7 @@ public class LasersModule : MonoBehaviour
     private readonly MeshRenderer[] _rightHatches = new MeshRenderer[9];
     private readonly Transform[] _laserLenses = new Transform[9];
     private readonly Transform[] _laserBeams = new Transform[9];
+    private readonly MeshRenderer[] _laserBodies = new MeshRenderer[9];
     private readonly Quaternion[] _laserTargetRotations = new Quaternion[9];
     private readonly bool[] _isLaserUp = new bool[9];
     private List<int> _laserOrder = new List<int>();
@@ -48,6 +49,7 @@ public class LasersModule : MonoBehaviour
 
         _laserLenses[0] = Lasers[0].Find("Lens");
         _laserBeams[0] = Lasers[0].Find("Beam");
+        _laserBodies[0] = Lasers[0].Find("Body").GetComponent<MeshRenderer>();
 
         for (int i = 0; i < 9; i++)
         {
@@ -251,24 +253,10 @@ public class LasersModule : MonoBehaviour
         var upPos = new Vector3(0, 0, .02f);
         var downPos = new Vector3(0, -.05f, .02f);
 
-        if (Lasers[i] == null)
-        {
-            Lasers[i] = Instantiate(Lasers[0]);
-            Lasers[i].parent = Hatches[i].transform;
-            Lasers[i].localRotation = _laserTargetRotations[i] = Quaternion.Euler(0, Rnd.Range(0f, 360f), 0);
-            Lasers[i].localScale = Lasers[0].localScale;
-            Lasers[i].name = "Laser";
-            _laserLenses[i] = Lasers[i].Find("Lens");
-            _laserBeams[i] = Lasers[i].Find("Beam");
-            _laserBeams[i].gameObject.SetActive(false);
-        }
         Lasers[i].localPosition = up ? downPos : upPos;
 
         if (up)
-        {
             yield return new WaitForSeconds(.5f);
-            Lasers[i].gameObject.SetActive(true);
-        }
         const float duration = 1.5f;
         var elapsed = 0f;
 
@@ -289,9 +277,29 @@ public class LasersModule : MonoBehaviour
         var unfinished = 2 * ixs.Length;
         for (int i = 0; i < ixs.Length; i++)
         {
-            _isLaserUp[ixs[i]] = up;
-            if (_laserBeams[ixs[i]] != null)
-                _laserBeams[ixs[i]].gameObject.SetActive(false);
+            var ix = ixs[i];
+
+            if (Lasers[ix] == null)
+            {
+                Lasers[ix] = Instantiate(Lasers[0]);
+                Lasers[ix].parent = Hatches[ix].transform;
+                Lasers[ix].localRotation = _laserTargetRotations[ix] = Quaternion.Euler(0, Rnd.Range(0f, 360f), 0);
+                Lasers[ix].localScale = Lasers[0].localScale;
+                Lasers[ix].name = "Laser";
+                _laserLenses[ix] = Lasers[ix].Find("Lens");
+                _laserBeams[ix] = Lasers[ix].Find("Beam");
+                _laserBodies[ix] = Lasers[ix].Find("Body").GetComponent<MeshRenderer>();
+            }
+            Lasers[ix].gameObject.SetActive(true);
+            _laserBeams[ix].gameObject.SetActive(false);
+
+            _isLaserUp[ix] = up;
+            if (up)
+            {
+                float h, s, v;
+                Color.RGBToHSV(color, out h, out s, out v);
+                _laserBodies[ix].material.color = Color.HSVToRGB(h, s * .25f, (v + 2) / 3);
+            }
         }
         for (int i = 0; i < ixs.Length; i++)
         {
@@ -324,7 +332,8 @@ public class LasersModule : MonoBehaviour
 
     private void LogPermissibleLasers()
     {
-        Debug.LogFormat("[Lasers #{0}] Stage {1}: Permissible lasers: {2}", _moduleId, _stageNames[_stage], Enumerable.Range(0, 9).Where(hatch => IsValid(hatch)).Select(hatch => _laserOrder[hatch]).JoinString(", "));
+        var permissible = Enumerable.Range(0, 9).Where(hatch => IsValid(hatch)).Select(hatch => _laserOrder[hatch]).JoinString(", ");
+        Debug.LogFormat("[Lasers #{0}] Stage {1}: Permissible lasers: {2}", _moduleId, _stageNames[_stage], permissible.Length == 0 ? "none! You must incur a strike." : permissible);
     }
 
 #pragma warning disable 414
