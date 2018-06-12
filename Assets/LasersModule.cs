@@ -138,8 +138,8 @@ public class LasersModule : MonoBehaviour
             var localDistance = .1f;
             if (Physics.Raycast(new Ray(lens.TransformPoint(0, 1.1f, 0), lens.TransformDirection(Vector3.up)), out hit))
                 localDistance = laser.InverseTransformVector(0, hit.distance, 0).magnitude;
-            beam.localPosition = new Vector3(localDistance, .031f, 0);
-            beam.localScale = new Vector3(.0025f, localDistance, .0025f);
+            beam.localPosition = new Vector3(localDistance / 2 + .016f, .031f, 0);
+            beam.localScale = new Vector3(.0025f, localDistance / 2 + .001f, .0025f);
         }
     }
 
@@ -227,7 +227,7 @@ public class LasersModule : MonoBehaviour
         var elapsed = 0f;
 
         if (!open)
-            yield return new WaitForSeconds(1f);
+            yield return new WaitForSeconds(1.5f);
 
         var leftOpen = new Vector3(-0.0201f, 0, 0);
         var leftClosed = new Vector3(-0.0001f, 0, 0);
@@ -256,7 +256,16 @@ public class LasersModule : MonoBehaviour
         Lasers[i].localPosition = up ? downPos : upPos;
 
         if (up)
+        {
+            _laserBeams[i].gameObject.SetActive(false);
             yield return new WaitForSeconds(.5f);
+        }
+        else
+        {
+            Audio.PlaySoundAtTransform("Laser2", _laserBeams[i]);
+            yield return new WaitForSeconds(.5f);
+            _laserBeams[i].gameObject.SetActive(false);
+        }
         const float duration = 1.5f;
         var elapsed = 0f;
 
@@ -291,7 +300,6 @@ public class LasersModule : MonoBehaviour
                 _laserBodies[ix] = Lasers[ix].Find("Body").GetComponent<MeshRenderer>();
             }
             Lasers[ix].gameObject.SetActive(true);
-            _laserBeams[ix].gameObject.SetActive(false);
 
             _isLaserUp[ix] = up;
             if (up)
@@ -312,8 +320,9 @@ public class LasersModule : MonoBehaviour
         {
             if (up)
             {
-                _laserBeams[ixs[i]].gameObject.SetActive(true);
                 _laserBeams[ixs[i]].GetComponent<MeshRenderer>().material.color = color;
+                _laserBeams[ixs[i]].gameObject.SetActive(true);
+                Audio.PlaySoundAtTransform("Laser1", _laserBeams[ixs[i]]);
             }
             else
                 Lasers[ixs[i]].gameObject.SetActive(false);
