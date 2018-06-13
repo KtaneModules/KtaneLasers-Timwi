@@ -13,7 +13,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   id: lasers
   title: Lasers
-  description: 
+  description: "Don\u2019t shoot yourself in the foot.\n\nModule created by Elias,
+    implemented by Riverbui, visuals by Timwi.\n\n[url=http://ktane.timwi.de/PDF/Lasers.pdf]Manual
+    PDF[/url]\n[url=http://ktane.timwi.de/HTML/Lasers.html]Manual HTML[/url]"
   version: 1.0
   outputFolder: build
-  previewImage: {fileID: 0}
+  previewImage: {fileID: 2800000, guid: bc52b0c60a4d04c488ad90c4f3eee1d2, type: 3}
