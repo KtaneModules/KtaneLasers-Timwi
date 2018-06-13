@@ -59,7 +59,7 @@ public class LasersModule : MonoBehaviour
             _rightHatches[i] = HatchesParent.transform.Find("Hatch" + (i + 1)).Find("Right").GetComponent<MeshRenderer>();
         }
 
-        _timeRoot = (int) Bomb.GetTime() % 9 + 1;    // Note: the rule is “time in minutes plus one”; the +1 cancels with a −1 in the formula for digital root
+        _timeRoot = ((int) Bomb.GetTime() / 60) % 9 + 1;    // Note: the rule is “time in minutes plus one”; the +1 cancels with a −1 in the formula for digital root
         _moduleParity = Bomb.GetModuleNames().Count() % 2;
 
         // Randomize the order of the lasers.
