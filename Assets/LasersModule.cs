@@ -2,7 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Lasers;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 using Rnd = UnityEngine.Random;
@@ -59,31 +59,30 @@ public class LasersModule : MonoBehaviour
             _rightHatches[i] = HatchesParent.transform.Find("Hatch" + (i + 1)).Find("Right").GetComponent<MeshRenderer>();
         }
 
-        _timeRoot = ((int) Bomb.GetTime() / 60) % 9 + 1;    // Note: the rule is “time in minutes plus one”; the +1 cancels with a −1 in the formula for digital root
-        _moduleParity = Bomb.GetModuleNames().Count() % 2;
-
         // Randomize the order of the lasers.
         // I have independently verified that every possible permutation has a solution for every possible timer digital root and module number parity.
         _laserOrder.AddRange(Enumerable.Range(1, 9));
         _laserOrder.Shuffle();
-
-        _rowRoot = (_laserOrder[0] + _laserOrder[1] + _laserOrder[2] - 1) % 9 + 1;
-        _columnRoot = (new[] { 1, 2, 4, 5, 7, 8 }.Sum(x => _laserOrder[x]) - 1) % 9 + 1;
-
-        Debug.LogFormat("[Lasers #{0}] Laser numbers in reading order: {1}", _moduleId, _laserOrder.JoinString(", "));
-        Debug.LogFormat("[Lasers #{0}] The laser numbers in the topmost row have digital root = {1}.", _moduleId, _rowRoot);
-        Debug.LogFormat("[Lasers #{0}] The laser numbers in the rightmost two columns have digital root = {1}.", _moduleId, _columnRoot);
-        Debug.LogFormat("[Lasers #{0}] The time in minutes plus one has digital root = {1}.", _moduleId, _timeRoot);
-        Debug.LogFormat("[Lasers #{0}] The number of modules on the bomb has parity = {1}.", _moduleId, _moduleParity);
 
         for (int i = 0; i < 9; i++)
         {
             _leftHatches[i].material.mainTexture = _leftTextures[_laserOrder[i] - 1];
             _rightHatches[i].material.mainTexture = _rightTextures[_laserOrder[i] - 1];
             Hatches[i].OnInteract += GetHatchPressHandler(i);
-            Hatches[i].OnDeselect += GetMouseSetter(null);
-            Hatches[i].OnSelect += GetMouseSetter(i);
+            Hatches[i].OnHighlightEnded += GetMouseSetter(null);
+            Hatches[i].OnHighlight += GetMouseSetter(i);
         }
+
+        _timeRoot = ((int) Bomb.GetTime() / 60) % 9 + 1;
+        _moduleParity = Bomb.GetModuleNames().Count() % 2;
+        _rowRoot = (_laserOrder[0] + _laserOrder[1] + _laserOrder[2] - 1) % 9 + 1;
+        _columnRoot = (new[] { 1, 2, 4, 5, 7, 8 }.Sum(x => _laserOrder[x]) - 1) % 9 + 1;
+
+        Debug.LogFormat("[Lasers #{0}] Laser numbers in reading order: {1}", _moduleId, _laserOrder.Join(", "));
+        Debug.LogFormat("[Lasers #{0}] The laser numbers in the topmost row have digital root = {1}.", _moduleId, _rowRoot);
+        Debug.LogFormat("[Lasers #{0}] The laser numbers in the rightmost two columns have digital root = {1}.", _moduleId, _columnRoot);
+        Debug.LogFormat("[Lasers #{0}] The time in minutes plus one has digital root = {1}.", _moduleId, _timeRoot);
+        Debug.LogFormat("[Lasers #{0}] The number of modules on the bomb has parity = {1}.", _moduleId, _moduleParity);
 
         StartCoroutine(ProcessQueue());
         LogPermissibleLasers();
@@ -94,7 +93,6 @@ public class LasersModule : MonoBehaviour
         return delegate
         {
             _mouseOnHatch = val;
-            Debug.LogFormat("<Lasers #{0}> Setting _mouseOnHatch to {1}", _moduleId, _mouseOnHatch == null ? "<null>" : _mouseOnHatch.Value.ToString());
         };
     }
 
@@ -331,29 +329,30 @@ public class LasersModule : MonoBehaviour
 
     private void LogPermissibleLasers()
     {
-        var permissible = Enumerable.Range(0, 9).Where(hatch => IsValid(hatch)).Select(hatch => _laserOrder[hatch]).JoinString(", ");
+        var permissible = Enumerable.Range(0, 9).Where(hatch => IsValid(hatch)).Select(hatch => _laserOrder[hatch]).Join(", ");
         Debug.LogFormat("[Lasers #{0}] Stage {1}: Permissible lasers: {2}", _moduleId, _stageNames[_stage], permissible.Length == 0 ? "none! You must incur a strike." : permissible);
     }
 
 #pragma warning disable 414
-    private readonly string TwitchHelpMessage = "Select a hatch in position 1–9 using “!{0} press 4”. Hatch positions are 1–9 in reading order. You may select multiple hatches by using “!{0} press 1235679”.";
+    private readonly string TwitchHelpMessage = "!{0} position 8472 [press hatches by position 1–9 in reading order] | !{0} label 8472 [press hatches by label]";
 #pragma warning restore 414
 
     private IEnumerator ProcessTwitchCommand(string command)
     {
-        var commands = command.ToLowerInvariant().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        var commands2 = command.ToLowerInvariant().Replace(" ", "").Replace("press", "");
+        var match = Regex.Match(command, @"^\s*(?:(?<pos>p|pos|position)|l|lbl|lab|label) (?<numbers>[ \d,;]+)$", RegexOptions.IgnoreCase);
+        if (!match.Success)
+            yield break;
 
-        int n;
-        if (commands.Length < 2 || commands.Length > 8 || !commands[0].Equals("press", StringComparison.InvariantCultureIgnoreCase) || commands2.Length > 8 || !int.TryParse(commands2, out n))
+        var usePosition = match.Groups["pos"].Success;
+        var numbers = match.Groups["numbers"].Value.Replace(" ", "").Replace(",", "").Replace(";", "");
+        if (numbers.Length >= 8)
             yield break;
 
         var buttons = new List<KMSelectable>();
-
-        foreach (char c in commands2)
+        for (int i = 0; i < numbers.Length; i++)
         {
-            n = c - '0' - 1;
-            if (_hatchesAlreadyPressed.Contains(n))
+            var n = usePosition ? numbers[i] - '1' : _laserOrder.IndexOf(numbers[i] - '0');
+            if (_hatchesAlreadyPressed.Contains(n) || buttons.Contains(Hatches[n]))
                 yield break;
             buttons.Add(Hatches[n]);
         }
