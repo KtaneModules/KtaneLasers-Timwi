@@ -29,11 +29,12 @@ public class LasersModule : MonoBehaviour
     private readonly MeshRenderer[] _laserBodies = new MeshRenderer[9];
     private readonly Quaternion[] _laserTargetRotations = new Quaternion[9];
     private readonly bool[] _isLaserUp = new bool[9];
-    private List<int> _laserOrder = new List<int>();
-    private List<int> _hatchesAlreadyPressed = new List<int>();
+    private readonly List<int> _laserOrder = new List<int>();
+    private readonly List<int> _hatchesAlreadyPressed = new List<int>();
     private int _stage, _rowRoot, _columnRoot, _timeRoot, _moduleParity;
-    private Queue<IEnumerable> queue = new Queue<IEnumerable>();
+    private readonly Queue<IEnumerable> queue = new Queue<IEnumerable>();
     private bool _animating;
+    private bool _isActivated = false;
     private bool _isSolved;
     private int? _mouseOnHatch;
 
@@ -73,19 +74,23 @@ public class LasersModule : MonoBehaviour
             Hatches[i].OnHighlight += GetMouseSetter(i);
         }
 
-        _timeRoot = ((int) Bomb.GetTime() / 60) % 9 + 1;
-        _moduleParity = Bomb.GetModuleNames().Count() % 2;
-        _rowRoot = (_laserOrder[0] + _laserOrder[1] + _laserOrder[2] - 1) % 9 + 1;
-        _columnRoot = (new[] { 1, 2, 4, 5, 7, 8 }.Sum(x => _laserOrder[x]) - 1) % 9 + 1;
+        Module.OnActivate += delegate
+        {
+            _timeRoot = ((int) Bomb.GetTime() / 60) % 9 + 1;
+            _moduleParity = Bomb.GetModuleNames().Count() % 2;
+            _rowRoot = (_laserOrder[0] + _laserOrder[1] + _laserOrder[2] - 1) % 9 + 1;
+            _columnRoot = (new[] { 1, 2, 4, 5, 7, 8 }.Sum(x => _laserOrder[x]) - 1) % 9 + 1;
 
-        Debug.LogFormat("[Lasers #{0}] Laser numbers in reading order: {1}", _moduleId, _laserOrder.Join(", "));
-        Debug.LogFormat("[Lasers #{0}] The laser numbers in the topmost row have digital root = {1}.", _moduleId, _rowRoot);
-        Debug.LogFormat("[Lasers #{0}] The laser numbers in the rightmost two columns have digital root = {1}.", _moduleId, _columnRoot);
-        Debug.LogFormat("[Lasers #{0}] The time in minutes plus one has digital root = {1}.", _moduleId, _timeRoot);
-        Debug.LogFormat("[Lasers #{0}] The number of modules on the bomb has parity = {1}.", _moduleId, _moduleParity);
+            Debug.LogFormat("[Lasers #{0}] Laser numbers in reading order: {1}", _moduleId, _laserOrder.Join(", "));
+            Debug.LogFormat("[Lasers #{0}] The laser numbers in the topmost row have digital root = {1}.", _moduleId, _rowRoot);
+            Debug.LogFormat("[Lasers #{0}] The laser numbers in the rightmost two columns have digital root = {1}.", _moduleId, _columnRoot);
+            Debug.LogFormat("[Lasers #{0}] The time in minutes plus one has digital root = {1}.", _moduleId, _timeRoot);
+            Debug.LogFormat("[Lasers #{0}] The number of modules on the bomb has parity = {1}.", _moduleId, _moduleParity);
 
-        StartCoroutine(ProcessQueue());
-        LogPermissibleLasers();
+            StartCoroutine(ProcessQueue());
+            LogPermissibleLasers();
+            _isActivated = true;
+        };
     }
 
     private Action GetMouseSetter(int? val)
@@ -175,7 +180,7 @@ public class LasersModule : MonoBehaviour
         {
             Hatches[i].AddInteractionPunch(.2f);
 
-            if (_isSolved)
+            if (_isSolved || !_isActivated)
                 return false;
 
             if (IsValid(i))
