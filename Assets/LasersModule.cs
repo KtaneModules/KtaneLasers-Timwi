@@ -84,7 +84,7 @@ public class LasersModule : MonoBehaviour
             Debug.LogFormat("[Lasers #{0}] Laser numbers in reading order: {1}", _moduleId, _laserOrder.Join(", "));
             Debug.LogFormat("[Lasers #{0}] The laser numbers in the topmost row have digital root = {1}.", _moduleId, _rowRoot);
             Debug.LogFormat("[Lasers #{0}] The laser numbers in the rightmost two columns have digital root = {1}.", _moduleId, _columnRoot);
-            Debug.LogFormat("[Lasers #{0}] The time in minutes plus one has digital root = {1}.", _moduleId, _timeRoot);
+            Debug.LogFormat("[Lasers #{0}] The time in minutes ({1}) plus one has digital root = {2}.", _moduleId, (int) Bomb.GetTime() / 60, _timeRoot);
             Debug.LogFormat("[Lasers #{0}] The number of modules on the bomb has parity = {1}.", _moduleId, _moduleParity);
 
             StartCoroutine(ProcessQueue());
